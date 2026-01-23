@@ -36,25 +36,27 @@ class Asset extends Model
      * Jangan campur dengan guarded
      */
     protected $fillable = [
+        'asset_code',
+        'serial_code',
         'name',
         'category_id',
         'location_id',
         'department_id',
         'employee_name',
-        'serial_code',
         'purchase_year',
         'brand',
         'model',
         'photo_path',
-        'asset_code',
-        'status',
-        'created_by',
-        'approved_by',
-        'approved_at',
         'qr_code_path',
+        'status',
     ];
     
+    public function getRouteKeyName()
+    {
+        return 'asset_code';
+    }
     
+
 
     /* =====================
      | CASTS

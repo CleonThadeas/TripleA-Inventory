@@ -24,11 +24,6 @@
                     <x-nav-link href="/packages-view" :active="request()->is('packages-view*')">
                         Packages
                     </x-nav-link>
-
-                    <x-nav-link href="/activity/asset/1">
-                        Activity
-                    </x-nav-link>
-
                 </div>
             </div>
 
@@ -73,14 +68,16 @@
 
                             <hr class="my-1">
 
-                            <x-dropdown-link href="{{ route('export.view.assets') }}">
+                            <x-dropdown-link href="{{ route('export.asset.view') }}">
                                 Export Assets
                             </x-dropdown-link>
 
-                            <x-dropdown-link href="{{ route('export.view.activity') }}">
+                            <x-dropdown-link href="{{ route('export.activity.view') }}">
                                 Export Activity Log
                             </x-dropdown-link>
-
+                            <x-dropdown-link href="{{ route('activity.recent') }}">
+                                Activity Log
+                            </x-dropdown-link>
                         </x-slot>
                     </x-dropdown>
                 @endif

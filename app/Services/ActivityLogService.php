@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use App\Models\ActivityLog;
 use Illuminate\Support\Facades\Auth;
+
 class ActivityLogService
 {
     public function log(
@@ -19,6 +20,7 @@ class ActivityLogService
         ActivityLog::create([
             'loggable_type' => get_class($model),
             'loggable_id'   => $model->id,
+            'loggable_code' => $model->asset_code ?? null, // KUNCI
             'action'        => strtoupper($action),
             'before_data'   => $before,
             'after_data'    => $after,
@@ -27,5 +29,5 @@ class ActivityLogService
             'meta'          => $meta,
         ]);
     }
-    
 }
+

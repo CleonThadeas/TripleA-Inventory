@@ -4,30 +4,21 @@ namespace App\Http\Controllers;
 
 use App\Models\Asset;
 use App\Services\QrCodeService;
-use Illuminate\Http\JsonResponse;
 
 class QrCodeController extends Controller
 {
-    public function __construct(
-        protected QrCodeService $qrCodeService
+    public function generate(
+        Asset $asset,
+        QrCodeService $qrCodeService
     ) {
-        $this->middleware(['auth', 'admin']);
+        $this->authorize('update', $asset);
+
+        $qrCodeService->generateForAsset($asset);
+
+        return back()->with('success', 'QR Code berhasil dibuat');
     }
-
-    /**
-     * Generate QR code for an asset (manual trigger)
-     */
-    public function generate(Asset $asset): JsonResponse
+    public function scanView()
     {
-        $url = $this->qrCodeService->generateForAsset($asset);
-
-        $asset->update([
-            'qr_code_path' => $url,
-        ]);
-
-        return response()->json([
-            'message' => 'QR code generated successfully',
-            'qr_url'  => $url,
-        ]);
+        return view('assets.scan-qr');
     }
 }

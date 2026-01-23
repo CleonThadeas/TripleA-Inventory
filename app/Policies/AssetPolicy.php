@@ -44,10 +44,11 @@ class AssetPolicy
     /**
      * Approve asset
      */
-    public function approve(User $user, Asset $asset): bool
+    public function approve(User $user, Asset $asset)
     {
-        return $user->isAdmin() && $asset->status === 'pending';
+        return $user->isAdmin();
     }
+    
     
 
     /**

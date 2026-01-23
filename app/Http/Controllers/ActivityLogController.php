@@ -39,5 +39,16 @@ public function exportForm()
         'users' => User::all(),
     ]);
 }
+// App\Http\Controllers\ActivityLogController.php
+
+public function recent()
+{
+    return view('activity.recent', [
+        'activities' => ActivityLog::with(['user', 'loggable'])
+            ->latest()
+            ->limit(50)
+            ->get()
+    ]);
+}
 
 }

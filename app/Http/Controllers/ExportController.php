@@ -7,13 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Category;
 use App\Models\Location;
 use App\Models\Department;
-
-
-
-/**
- * @method $this middleware(array|string $middleware)
- * @method void authorize(string $ability, mixed $arguments = [])
- */
+use App\Models\User;
 
 class ExportController extends Controller
 {
@@ -23,15 +17,39 @@ class ExportController extends Controller
         $this->middleware('auth');
     }
 
+    /* =========================
+     | VIEW FORM
+     ========================= */
+
+    public function viewAssetForm()
+    {
+        return view('export.asset', [
+            'categories'  => Category::all(),
+            'locations'   => Location::all(),
+            'departments' => Department::all(),
+        ]);
+    }
+
+    public function viewActivityForm()
+    {
+        return view('export.activity', [
+            'users' => User::all(),
+        ]);
+    }
+
+    /* =========================
+     | EXPORT ACTION
+     ========================= */
+
     public function exportAssets(Request $request)
     {
-        $filters = $request->only([
-            'status',
-            'category_id',
-            'location_id',
-            'department_id',
-            'year_from',
-            'year_to',
+        $filters = $request->validate([
+            'status'        => 'nullable|string',
+            'category_id'   => 'nullable|integer',
+            'location_id'   => 'nullable|integer',
+            'department_id' => 'nullable|integer',
+            'year_from'     => 'nullable|integer',
+            'year_to'       => 'nullable|integer',
         ]);
 
         $format = $request->get('format', 'xlsx');
@@ -39,12 +57,21 @@ class ExportController extends Controller
         return $this->exportService
             ->exportAssets($filters, $format);
     }
-    public function viewForm()
-{
-    return view('export.assets', [
-        'categories'  => Category::all(),
-        'locations'   => Location::all(),
-        'departments' => Department::all(),
-    ]);
-}
+
+    public function exportActivity(Request $request)
+    {
+        $filters = $request->only([
+            'subject_type',
+            'action',
+            'user_id',
+            'date_from',
+            'date_to',
+        ]);
+    
+        $format = $request->get('format', 'xlsx');
+    
+        return $this->exportService
+            ->exportActivities($filters, $format);
+    }
+    
 }

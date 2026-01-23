@@ -15,7 +15,6 @@ use App\Http\Controllers\ComponentController;
 use App\Http\Controllers\ApprovalController;
 use App\Http\Controllers\QrCodeController;
 use App\Http\Controllers\ExportController;
-use App\Http\Controllers\PdfExportController;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\UserManagementController;
 
@@ -70,9 +69,13 @@ Route::middleware(['auth'])->group(function () {
     | ASSET QR CODE
     |--------------------------------------------------------------------------
     */
-    Route::post('/assets/{asset}/qr', [QrCodeController::class, 'generate'])
-        ->name('assets.qr');
+    Route::post('/assets/{asset}/approve', [ApprovalController::class, 'approve'])
+    ->name('assets.approve');
 
+    Route::post('/assets/{asset}/qr',
+        [QrCodeController::class, 'generate']
+    )->name('assets.qr');
+    
     /*
     |--------------------------------------------------------------------------
     | ASSET UI
@@ -84,14 +87,17 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/assets-view/create', [AssetController::class, 'viewCreate'])
         ->name('assets.view.create');
 
-    Route::get('/assets-view/{asset}', [AssetController::class, 'viewShow'])
-        ->name('assets.view.show');
+        Route::get('/assets-view/{asset:asset_code}', [AssetController::class, 'viewShow'])
+        ->name('assets.view.show');   
 
     Route::get('/assets-view/{asset}/edit', [AssetController::class, 'viewEdit'])
         ->name('assets.view.edit');
 
     Route::get('/assets-view/{asset}/history', [AssetController::class, 'viewHistory'])
         ->name('assets.view.history');
+// routes/web.php
+Route::get('/scan-qr', [QrCodeController::class, 'scanView'])
+    ->name('assets.qr.scan');
 
     /*
     |--------------------------------------------------------------------------
@@ -123,14 +129,6 @@ Route::middleware(['auth'])->group(function () {
 Route::delete('/assets/{asset}', [AssetController::class, 'destroy'])
 ->name('assets.destroy');
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | EXPORT UI (USER)
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/export-view/assets', [ExportController::class, 'viewForm'])
-        ->name('export.view.assets');
 });
 
 /*
@@ -139,6 +137,10 @@ Route::delete('/assets/{asset}', [AssetController::class, 'destroy'])
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth', 'admin'])->group(function () {
+
+
+    Route::get('/activity-view/recent', [ActivityLogController::class, 'recent'])
+    ->name('activity.recent');
 
     /*
     |--------------------------------------------------------------------------
@@ -186,15 +188,23 @@ Route::middleware(['auth', 'admin'])->group(function () {
     | ACTIVITY LOG UI
     |--------------------------------------------------------------------------
     */
-    Route::get('/activity-view/{type}/{id}', [ActivityLogController::class, 'viewDetail'])
-        ->name('activity.view.detail');
+    // VIEW
+    Route::get('/export/assets', [ExportController::class, 'viewAssetForm'])
+        ->name('export.asset.view');
 
-    Route::get('/export-view/activity', [ActivityLogController::class, 'exportForm'])
-        ->name('export.view.activity');
+    Route::get('/export/activity', [ExportController::class, 'viewActivityForm'])
+        ->name('export.activity.view');
+
+    // ACTION
+    Route::get('/export/assets/run', [ExportController::class, 'exportAssets'])
+        ->name('export.asset');
+
+    Route::get('/export/activity/run', [ExportController::class, 'exportActivity'])
+        ->name('export.activity');
 
     /*
     |--------------------------------------------------------------------------
-    | AUDIT & PDF
+    | AUDIT
     |--------------------------------------------------------------------------
     */
     Route::get('/audit/assets/{asset}', [AssetController::class, 'auditView'])
@@ -202,9 +212,6 @@ Route::middleware(['auth', 'admin'])->group(function () {
 
     Route::get('/audit/packages/{package}', [AssetPackageController::class, 'auditView'])
         ->name('packages.audit.view');
-
-    Route::get('/pdf/assets/{asset}', [PdfExportController::class, 'asset'])
-        ->name('pdf.asset');
 
     /*
     |--------------------------------------------------------------------------

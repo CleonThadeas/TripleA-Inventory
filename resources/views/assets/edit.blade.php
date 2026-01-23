@@ -10,7 +10,7 @@
     
         {{-- ================= FORM UPDATE ASSET ================= --}}
         <form method="POST"
-              action="{{ route('assets.update', $asset->id) }}"
+              action="{{ route('assets.update', $asset->asset_code) }}"
               enctype="multipart/form-data"
               class="border p-4 space-y-4">
             @csrf
@@ -83,7 +83,7 @@
             @csrf
     
             <input type="hidden" name="parent_type" value="asset">
-            <input type="hidden" name="parent_id" value="{{ $asset->id }}">
+            <input type="hidden" name="parent_id" value="{{ $asset->asset_code }}">
     
             <h3 class="font-semibold">Tambah Komponen Baru</h3>
     
@@ -100,7 +100,7 @@
         {{-- ================= DELETE ASSET ================= --}}
         <div class="flex justify-end">
             <form method="POST"
-                  action="{{ route('assets.destroy', $asset->id) }}"
+                  action="{{ route('assets.destroy', $asset->asset_code) }}"
                   onsubmit="return confirm('Asset akan dihapus.\nHistory tetap disimpan.\n\nLanjutkan?')">
                 @csrf
                 @method('DELETE')

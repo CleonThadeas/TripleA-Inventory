@@ -18,6 +18,7 @@ use Illuminate\View\View;
 use App\Services\ApprovalService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use App\Services\QrCodeService;
 
 
 
@@ -124,7 +125,25 @@ class AssetController extends Controller
     public function show(Asset $asset)
     {
         $this->authorize('view', $asset);
-
+    
+        $asset->load([
+            'category',
+            'location',
+            'department',
+            'creator',
+            'approver',
+            'components',
+            'activities.user',
+        ]);
+    
+        return view('assets.show', compact('asset'));
+    }
+    
+    
+    public function showJson(Asset $asset)
+    {
+        $this->authorize('view', $asset);
+    
         return response()->json(
             $asset->load([
                 'category',
@@ -136,7 +155,7 @@ class AssetController extends Controller
             ])
         );
     }
-
+    
     /*
     |--------------------------------------------------------------------------
     | API – UPDATE ASSET
@@ -205,12 +224,51 @@ class AssetController extends Controller
     | VIEW – ASSET LIST
     |--------------------------------------------------------------------------
     */
-    public function viewIndex(): View
+    public function viewIndex(Request $request)
     {
+        $query = Asset::query()->with(['category', 'location', 'department']);
+    
+        // SEARCH
+        if ($request->filled('q')) {
+            $q = $request->q;
+            $query->where(function ($sub) use ($q) {
+                $sub->where('asset_code', 'like', "%$q%")
+                    ->orWhere('name', 'like', "%$q%")
+                    ->orWhere('serial_code', 'like', "%$q%");
+            });
+        }
+    
+        // FILTERS
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->category_id);
+        }
+    
+        if ($request->filled('location_id')) {
+            $query->where('location_id', $request->location_id);
+        }
+    
+        if ($request->filled('department_id')) {
+            $query->where('department_id', $request->department_id);
+        }
+    
+        if ($request->filled('purchase_year')) {
+            $query->where('purchase_year', $request->purchase_year);
+        }
+    
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+    
+        $assets = $query->latest()->paginate(10)->withQueryString();
+    
         return view('assets.index', [
-            'assets' => Asset::latest()->get(),
+            'assets'      => $assets,
+            'categories'  => Category::all(),
+            'locations'   => Location::all(),
+            'departments' => Department::all(),
         ]);
     }
+    
 
     /*
     |--------------------------------------------------------------------------
@@ -330,6 +388,24 @@ class AssetController extends Controller
         return redirect()
             ->route('assets.view.index')
             ->with('success', 'Asset berhasil dihapus (history tetap disimpan)');
+    }
+    
+    public function approve(
+        Asset $asset,
+        QrCodeService $qrCodeService
+    ) {
+        $this->authorize('approve', $asset);
+    
+        $asset->update([
+            'status'       => 'active',
+            'approved_by'  => Auth::id(),
+            'approved_at'  => now(),
+        ]);
+    
+        // AUTO GENERATE QR
+        $qrCodeService->generateForAsset($asset);
+    
+        return back()->with('success', 'Asset disetujui & QR Code dibuat');
     }
     
     

@@ -3,77 +3,60 @@
 namespace App\Http\Controllers;
 
 use App\Models\Asset;
+use App\Services\QrCodeService;
+use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Models\AssetPackage;
-
+use Illuminate\Support\Facades\DB;
 
 class ApprovalController extends Controller
 {
-    public function approve(Asset $asset)
-    {
-        // Hanya asset pending
-        $before = $asset->fresh()->toArray();
+    protected QrCodeService $qrCodeService;
+    protected ActivityLogService $activityLogService;
 
-        $asset->update([
-            'status'      => 'active',
-            'approved_by' => Auth::id(),
-            'approved_at' => now(),
-        ]);
-        
-        $after = $asset->fresh()->toArray();
-        
-        app(\App\Services\ActivityLogService::class)->log(
-            $asset,
-            'approve',
-            $before,
-            $after,
-            request()
-        );
-        
-        return redirect()
-            ->route('assets.view.show', $asset->id)
-            ->with('success', 'Asset approved successfully.');
+    public function __construct(
+        QrCodeService $qrCodeService,
+        ActivityLogService $activityLogService
+    ) {
+        $this->middleware(['auth', 'admin']);
+        $this->qrCodeService = $qrCodeService;
+        $this->activityLogService = $activityLogService;
     }
 
-    public function reject(Asset $asset)
+    /**
+     * Approve Asset + Auto Generate QR Code
+     */
+    public function approve(Request $request, Asset $asset)
     {
-        $before = $asset->fresh()->toArray();
+        $this->authorize('approve', $asset);
 
-        $asset->update([
-            'status'      => 'rejected',
-            'approved_by' => Auth::id(),
-            'approved_at' => now(),
-        ]);
-        
-        $after = $asset->fresh()->toArray();
-        
-        app(\App\Services\ActivityLogService::class)->log(
-            $asset,
-            'reject',
-            $before,
-            $after,
-            request()
-        );
-        
+        DB::transaction(function () use ($asset, $request) {
+
+            // 1. Approve asset
+            $asset->status = 'active';
+            $asset->approved_by = Auth::id();
+            $asset->approved_at = now();
+            $asset->save();
+
+            // 2. AUTO GENERATE QR CODE (jika belum ada)
+            if (!$asset->qr_code_path) {
+                $qrPath = $this->qrCodeService->generateForAsset($asset);
+                $asset->qr_code_path = $qrPath;
+                $asset->save();
+            }
+
+            // 3. Activity log
+            $this->activityLogService->log(
+                model: $asset,
+                action: 'approve',
+                before: null,
+                after: $asset->fresh()->toArray(),
+                request: $request
+            );
+        });
 
         return redirect()
-            ->route('assets.view.show', $asset->id)
-            ->with('success', 'Asset rejected.');
+            ->route('assets.view.show', $asset->asset_code)
+            ->with('success', 'Asset berhasil disetujui dan QR Code dibuat.');
     }
-
-    public function packageIndex()
-{
-    $this->authorize('approve', AssetPackage::class);
-
-    $packages = AssetPackage::where('status', 'pending')
-        ->with(['department', 'location', 'employee', 'creator'])
-        ->orderBy('created_at')
-        ->get();
-
-    return view('approval.packages', [
-        'packages' => $packages
-    ]);
-}
-
 }

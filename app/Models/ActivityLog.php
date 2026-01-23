@@ -19,6 +19,7 @@ class ActivityLog extends Model
     protected $casts = [
         'before_data' => 'array',
         'after_data'  => 'array',
+        'meta'        => 'array',
     ];
 
     public function loggable()

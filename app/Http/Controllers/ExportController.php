@@ -7,13 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Category;
 use App\Models\Location;
 use App\Models\Department;
-
-
-
-/**
- * @method $this middleware(array|string $middleware)
- * @method void authorize(string $ability, mixed $arguments = [])
- */
+use App\Models\User;
 
 class ExportController extends Controller
 {
@@ -23,28 +17,91 @@ class ExportController extends Controller
         $this->middleware('auth');
     }
 
+    /* =========================================================
+     | VIEW FORM – ASSET EXPORT
+     ========================================================= */
+    public function viewAssetForm()
+    {
+        return view('export.asset', [
+            'categories'  => Category::all(),
+            'locations'   => Location::all(),
+            'departments' => Department::all(),
+        ]);
+    }
+
+    /* =========================================================
+     | VIEW FORM – ACTIVITY LOG EXPORT
+     ========================================================= */
+    public function viewActivityForm()
+    {
+        return view('export.activity', [
+            'users' => User::all(),
+        ]);
+    }
+
+    /* =========================================================
+     | EXPORT ASSETS (SINGLE / GROUP / BOTH)
+     ========================================================= */
     public function exportAssets(Request $request)
     {
-        $filters = $request->only([
-            'status',
-            'category_id',
-            'location_id',
-            'department_id',
-            'year_from',
-            'year_to',
+        $validated = $request->validate([
+            'status'        => 'nullable|string',
+            'category_id'   => 'nullable|integer',
+            'location_id'   => 'nullable|integer',
+            'department_id' => 'nullable|integer',
+            'year_from'     => 'nullable|integer',
+            'year_to'       => 'nullable|integer',
+
+            'export_type'   => 'required|in:single,group,both',
+            'sheet_mode'    => 'required|in:single,separate',
+            'format'        => 'required|in:xlsx,csv',
         ]);
 
-        $format = $request->get('format', 'xlsx');
+        $filters = [
+            'status'        => $validated['status']        ?? null,
+            'category_id'   => $validated['category_id']   ?? null,
+            'location_id'   => $validated['location_id']   ?? null,
+            'department_id' => $validated['department_id'] ?? null,
+            'year_from'     => $validated['year_from']     ?? null,
+            'year_to'       => $validated['year_to']       ?? null,
+        ];
 
-        return $this->exportService
-            ->exportAssets($filters, $format);
+        // ⚠️ POSitional arguments — AMAN
+        return $this->exportService->exportAssets(
+            $filters,
+            $validated['export_type'],
+            $validated['sheet_mode'],
+            $validated['format']
+        );
     }
-    public function viewForm()
-{
-    return view('export.assets', [
-        'categories'  => Category::all(),
-        'locations'   => Location::all(),
-        'departments' => Department::all(),
-    ]);
-}
+
+    /* =========================================================
+     | EXPORT ACTIVITY LOG
+     ========================================================= */
+    public function exportActivity(Request $request)
+    {
+        $validated = $request->validate([
+            'subject_type' => 'nullable|in:asset,group,both',
+            'action'       => 'nullable|string',
+            'user_id'      => 'nullable|integer',
+            'date_from'    => 'nullable|date',
+            'date_to'      => 'nullable|date',
+            'sheet_mode'   => 'required|in:single,separate',
+            'format'       => 'required|in:xlsx,csv',
+        ]);
+
+        $filters = [
+            'subject_type' => $validated['subject_type'] ?? 'both',
+            'action'       => $validated['action']       ?? null,
+            'user_id'      => $validated['user_id']      ?? null,
+            'date_from'    => $validated['date_from']    ?? null,
+            'date_to'      => $validated['date_to']      ?? null,
+        ];
+
+        return $this->exportService->exportActivities(
+            $filters,
+            $validated['sheet_mode'],
+            $validated['format']
+        );
+    }
 }

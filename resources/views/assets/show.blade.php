@@ -37,14 +37,22 @@
             @endif
 
             <h3>QR Code</h3>
+
             @if ($asset->qr_code_path)
                 <img src="{{ asset('storage/' . $asset->qr_code_path) }}" width="200">
             @else
-                <form method="POST" action="{{ route('assets.qr', $asset->id) }}">
-                    @csrf
-                    <button type="submit">Generate QR Code</button>
-                </form>
+                <p class="text-gray-500">QR Code belum tersedia</p>
+            
+                @if(auth()->user()->isAdmin())
+                    <form method="POST" action="{{ route('assets.qr', $asset->asset_code, $asset->id) }}">
+                        @csrf
+                        <button class="border px-3 py-1">
+                            Generate QR Manual
+                        </button>
+                    </form>
+                @endif
             @endif
+            
         </div>
         
 

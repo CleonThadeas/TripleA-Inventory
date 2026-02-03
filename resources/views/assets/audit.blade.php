@@ -117,5 +117,5 @@
 
     <hr>
 
-    <a href="{{ route('assets.view.show', $asset->id) }}">← Kembali ke Detail Asset</a>
+    <a href="{{ route('assets.view.index') }}">← Kembali ke Daftar Asset</a>
 </x-app-layout>

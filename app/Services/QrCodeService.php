@@ -2,41 +2,43 @@
 
 namespace App\Services;
 
-use App\Models\Asset;
-use Illuminate\Support\Facades\Storage;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use Illuminate\Support\Facades\Storage;
 
 class QrCodeService
 {
-    /**
-     * Generate or regenerate QR code for an asset
-     */
-    public function generateForAsset(Asset $asset): string
+    public function generateForAsset($asset): ?string
     {
-        if (empty($asset->asset_code)) {
-            throw new \RuntimeException('Asset code not found.');
+        // VALIDASI WAJIB
+        if (!$asset || empty($asset->asset_code)) {
+            return null;
         }
 
-        $directory = 'public/qrcodes/assets';
-        $filename  = $asset->asset_code . '.png';
-        $path      = $directory . '/' . $filename;
+        /**
+         * ===============================
+         * PENTING:
+         * QR HANYA MENYIMPAN KODE ASSET
+         * ===============================
+         */
+        $qrContent = $asset->asset_code;
 
-        // Pastikan direktori ada
-        Storage::makeDirectory($directory);
+        // PATH FILE QR
+        $path = 'qr_codes/asset_' . $asset->asset_code . '.svg';
 
-        // Payload QR (audit-friendly)
-        $payload = $asset->full_asset_code;
-
-        // Generate QR code (PNG binary)
-        $qrPng = QrCode::format('png')
+        // GENERATE QR (SVG TANPA IMAGICK)
+        $qrSvg = QrCode::format('svg')
             ->size(300)
             ->margin(2)
-            ->generate($payload);
+            ->generate($qrContent);
 
-        // Simpan ke storage
-        Storage::put($path, $qrPng);
+        // SIMPAN KE STORAGE
+        Storage::disk('public')->put($path, $qrSvg);
 
-        // Return public URL
-        return Storage::url($path); // /storage/qrcodes/assets/XXX.png
+        // UPDATE DATABASE
+        $asset->update([
+            'qr_code_path' => $path,
+        ]);
+
+        return $path;
     }
 }

@@ -8,58 +8,57 @@ use App\Models\User;
 class AssetPolicy
 {
     /**
-     * View asset
+     * CREATE
+     * - Admin  : langsung boleh (auto approve)
+     * - Staff  : boleh create tapi status pending
      */
-    public function view(User $user, Asset $asset): bool
+    public function create(User $user): bool
     {
-        return true; // Semua role boleh melihat
+        return in_array($user->role, ['admin', 'staff']);
     }
 
     /**
-     * Create asset
+     * VIEW
+     * - Semua user login boleh lihat
      */
-    public function create(User $user): bool
+    public function view(User $user, Asset $asset): bool
     {
         return true;
     }
 
     /**
-     * Update asset
+     * UPDATE
+     * - Admin  : bebas edit kapan saja
+     * - Staff  :
+     *   - boleh edit asset miliknya
+     *   - jika asset sudah approved → perubahan masuk pending approval
      */
     public function update(User $user, Asset $asset): bool
     {
-        // Admin bisa edit semua
         if ($user->isAdmin()) {
             return true;
         }
 
-        // Staff hanya boleh edit sebelum approve
-        return $asset->created_by === $user->id
-            && $asset->approved_at === null;
+        return $user->isStaff()
+            && $asset->created_by === $user->id;
     }
+
+    /**
+     * DELETE
+     * - Admin saja
+     */
     public function delete(User $user, Asset $asset): bool
     {
         return $user->isAdmin();
     }
+
     /**
-     * Approve asset
+     * APPROVE
+     * - Admin saja
      */
     public function approve(User $user, Asset $asset): bool
     {
-        return $user->isAdmin() && $asset->status === 'pending';
+        return $user->isAdmin()
+            && $asset->approval_status === 'pending';
     }
-    
-
-    /**
-     * Change status
-     */
-    public function changeStatus(User $user, Asset $asset): bool
-    {
-        return $user->isAdmin();
-    }
-    // AppServiceProvider
-protected $policies = [
-    Asset::class => AssetPolicy::class,
-];
-
 }

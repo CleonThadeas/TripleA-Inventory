@@ -1,32 +1,22 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Auth;
-
-/*
-|--------------------------------------------------------------------------
-| CONTROLLERS
-|--------------------------------------------------------------------------
-*/
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\AssetController;
-use App\Http\Controllers\AssetPackageController;
-use App\Http\Controllers\ComponentController;
-use App\Http\Controllers\ApprovalController;
-use App\Http\Controllers\QrCodeController;
-use App\Http\Controllers\ExportController;
-use App\Http\Controllers\PdfExportController;
-use App\Http\Controllers\ActivityLogController;
-use App\Http\Controllers\UserManagementController;
-
-/*
-|--------------------------------------------------------------------------
-| MASTER DATA CONTROLLERS
-|--------------------------------------------------------------------------
-*/
-use App\Http\Controllers\Master\CategoryController;
-use App\Http\Controllers\Master\LocationController;
-use App\Http\Controllers\Master\DepartmentController;
+use App\Http\Controllers\{
+    DashboardController,
+    AssetController,
+    ComponentController,
+    ApprovalController,
+    QrCodeController,
+    ExportController,
+    ActivityLogController,
+    UserManagementController,
+    AssetGroupController
+};
+use App\Http\Controllers\Master\{
+    CategoryController,
+    LocationController,
+    DepartmentController
+};
 
 /*
 |--------------------------------------------------------------------------
@@ -37,193 +27,118 @@ Route::get('/', fn () => redirect('/login'));
 
 /*
 |--------------------------------------------------------------------------
-| AUTHENTICATED ROUTES
+| AUTH ROUTES
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth'])->group(function () {
+Route::middleware('auth')->group(function () {
 
-    /*
-    |--------------------------------------------------------------------------
-    | DASHBOARD
-    |--------------------------------------------------------------------------
-    */
+    /* ===== DASHBOARD ===== */
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->name('dashboard');
 
-    /*
-    |--------------------------------------------------------------------------
-    | ASSET API (BACKEND)
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/assets', [AssetController::class, 'index']);
-    Route::post('/assets', [AssetController::class, 'store'])
-    ->name('assets.store');
-    Route::get('/assets/{asset}', [AssetController::class, 'show']);
-    Route::put('/assets/{asset}', [AssetController::class, 'update'])
-    ->name('assets.update');
-    Route::delete('/assets/{asset}', [AssetController::class, 'destroy'])
-    ->name('assets.destroy');
+    /* ===== ASSET API ===== */
+    Route::prefix('assets')->name('assets.')->group(function () {
+        Route::get('/', [AssetController::class, 'index']);
+        Route::post('/', [AssetController::class, 'store'])->name('store');
+        Route::get('/{asset}', [AssetController::class, 'show']);
+        Route::put('/{asset}', [AssetController::class, 'update'])->name('update');
+        Route::delete('/{asset}', [AssetController::class, 'destroy'])->name('destroy');
+        Route::post('/{asset}/qr', [QrCodeController::class, 'generate'])->name('qr');
+    });
 
+    /* ===== ASSET VIEW ===== */
+    Route::prefix('assets-view')->name('assets.view.')->group(function () {
+        Route::get('/', [AssetController::class, 'viewIndex'])->name('index');
+        Route::get('/create', [AssetController::class, 'viewCreate'])->name('create');
+        Route::get('/{asset:asset_code}', [AssetController::class, 'viewShow'])->name('show');
+        Route::get('/{asset}/edit', [AssetController::class, 'viewEdit'])->name('edit');
+        Route::get('/{asset}/history', [AssetController::class, 'viewHistory'])->name('history');
+    });
 
-    /*
-    |--------------------------------------------------------------------------
-    | ASSET QR CODE
-    |--------------------------------------------------------------------------
-    */
-    Route::post('/assets/{asset}/qr', [QrCodeController::class, 'generate'])
-        ->name('assets.qr');
+    /* ===== ASSET GROUP ===== */
+    Route::resource('asset-groups', AssetGroupController::class)
+        ->parameters(['asset-groups' => 'asset_group'])
+        ->only(['store', 'edit', 'update', 'destroy']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | ASSET UI
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/assets-view', [AssetController::class, 'viewIndex'])
-        ->name('assets.view.index');
+    /* ===== COMPONENT ===== */
+    Route::prefix('components')->name('components.')->group(function () {
+        Route::post('/', [ComponentController::class, 'store'])->name('store');
+        Route::put('/{component}', [ComponentController::class, 'update'])->name('update');
+        Route::delete('/{component}', [ComponentController::class, 'destroy'])->name('destroy');
+    });
 
-    Route::get('/assets-view/create', [AssetController::class, 'viewCreate'])
-        ->name('assets.view.create');
-
-    Route::get('/assets-view/{asset}', [AssetController::class, 'viewShow'])
-        ->name('assets.view.show');
-
-    Route::get('/assets-view/{asset}/edit', [AssetController::class, 'viewEdit'])
-        ->name('assets.view.edit');
-
-    Route::get('/assets-view/{asset}/history', [AssetController::class, 'viewHistory'])
-        ->name('assets.view.history');
-
-    /*
-    |--------------------------------------------------------------------------
-    | ASSET PACKAGE UI
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/packages-view', [AssetPackageController::class, 'viewIndex'])
-        ->name('packages.view.index');
-
-    Route::get('/packages-view/create', [AssetPackageController::class, 'viewCreate'])
-        ->name('packages.view.create');
-
-    Route::get('/packages-view/{package}', [AssetPackageController::class, 'viewShow'])
-        ->name('packages.view.show');
-
-    Route::get('/packages-view/{package}/edit', [AssetPackageController::class, 'viewEdit'])
-        ->name('packages.view.edit');
-
-    /*
-    |--------------------------------------------------------------------------
-    | COMPONENT CRUD (PACKAGE ITEM)
-    |--------------------------------------------------------------------------
-    */
-    Route::post('/components', [ComponentController::class, 'store'])->name('components.store');
-    Route::put('/components/{component}', [ComponentController::class, 'update'])->name('components.update');
-    Route::delete('/components/{component}', [ComponentController::class, 'destroy'])->name('components.destroy');
-    
-    // web.php
-Route::delete('/assets/{asset}', [AssetController::class, 'destroy'])
-->name('assets.destroy');
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | EXPORT UI (USER)
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/export-view/assets', [ExportController::class, 'viewForm'])
-        ->name('export.view.assets');
+    /* ===== QR SCAN ===== */
+    Route::get('/scan-qr', [QrCodeController::class, 'scanView'])
+        ->name('assets.qr.scan');
 });
 
 /*
 |--------------------------------------------------------------------------
-| ADMIN ONLY ROUTES
+| ADMIN ONLY
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth', 'admin'])->group(function () {
 
-    /*
-    |--------------------------------------------------------------------------
-    | MASTER DATA MANAGEMENT
-    |--------------------------------------------------------------------------
-    */
+    /* ===== ACTIVITY LOG ===== */
+    Route::get('/activity-view/recent', [ActivityLogController::class, 'recent'])
+        ->name('activity.recent');
+
+    /* ===== MASTER DATA ===== */
     Route::prefix('master')->group(function () {
-
-   // CATEGORY
-   Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
-   Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
-   Route::delete('/categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
-
-   // LOCATION
-   Route::get('/locations', [LocationController::class, 'index'])->name('locations.index');
-   Route::post('/locations', [LocationController::class, 'store'])->name('locations.store');
-   Route::delete('/locations/{location}', [LocationController::class, 'destroy'])->name('locations.destroy');
-
-   // DEPARTMENT
-   Route::get('/departments', [DepartmentController::class, 'index'])->name('departments.index');
-   Route::post('/departments', [DepartmentController::class, 'store'])->name('departments.store');
-   Route::delete('/departments/{department}', [DepartmentController::class, 'destroy'])->name('departments.destroy');
-
+        Route::resource('categories', CategoryController::class)->only(['index','store','destroy']);
+        Route::resource('locations', LocationController::class)->only(['index','store','destroy']);
+        Route::resource('departments', DepartmentController::class)->only(['index','store','destroy']);
     });
 
-    /*
-    |--------------------------------------------------------------------------
-    | APPROVAL UI
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/approval/assets', [ApprovalController::class, 'assetIndex'])
-        ->name('approval.assets');
+    /* ===== APPROVAL SYSTEM ===== */
+    Route::prefix('approvals')->name('approvals.')->group(function () {
 
-    Route::post('/assets/{asset}/approve', [ApprovalController::class, 'approve'])
-        ->name('assets.approve');
+        Route::get('/', [ApprovalController::class, 'index'])->name('index');
 
-    Route::post('/assets/{asset}/reject', [ApprovalController::class, 'reject'])
-        ->name('assets.reject');
+        // Asset approval
+        Route::get('/assets/{asset}', [ApprovalController::class, 'showAsset'])->name('assets.show');
+        Route::post('/assets/{asset}/approve', [ApprovalController::class, 'approveAsset'])->name('assets.approve');
+        Route::post('/assets/{asset}/reject', [ApprovalController::class, 'rejectAsset'])->name('assets.reject');
 
-    Route::get('/approval/packages', [ApprovalController::class, 'packageIndex'])
-        ->name('approval.packages');
+        // Group approval
+        Route::get('/groups/{asset_group}', [ApprovalController::class, 'showGroup'])->name('groups.show');
+        Route::post('/groups/{asset_group}/approve', [ApprovalController::class, 'approveGroup'])->name('groups.approve');
+        Route::post('/groups/{asset_group}/reject', [ApprovalController::class, 'rejectGroup'])->name('groups.reject');
 
-    /*
-    |--------------------------------------------------------------------------
-    | ACTIVITY LOG UI
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/activity-view/{type}/{id}', [ActivityLogController::class, 'viewDetail'])
-        ->name('activity.view.detail');
+        // Change approval
+        Route::get('/changes', [ApprovalController::class, 'pendingChanges'])->name('changes');
+        Route::get('/changes/{log}', [ApprovalController::class, 'showChange'])->name('changes.show');
+        Route::post('/changes/{log}/approve', [ApprovalController::class, 'approveChange'])->name('changes.approve');
+        Route::post('/changes/{log}/reject', [ApprovalController::class, 'rejectChange'])->name('changes.reject');
+    });
 
-    Route::get('/export-view/activity', [ActivityLogController::class, 'exportForm'])
-        ->name('export.view.activity');
+    /* ===== EXPORT ===== */
+    Route::prefix('export')->group(function () {
+        Route::get('/assets', [ExportController::class, 'viewAssetForm'])->name('export.asset.view');
+        Route::get('/activity', [ExportController::class, 'viewActivityForm'])->name('export.activity.view');
+        Route::get('/assets/run', [ExportController::class, 'exportAssets'])->name('export.asset');
+        Route::get('/activity/run', [ExportController::class, 'exportActivity'])->name('export.activity');
+    });
 
-    /*
-    |--------------------------------------------------------------------------
-    | AUDIT & PDF
-    |--------------------------------------------------------------------------
-    */
+    /* ===== AUDIT ===== */
     Route::get('/audit/assets/{asset}', [AssetController::class, 'auditView'])
         ->name('assets.audit.view');
 
-    Route::get('/audit/packages/{package}', [AssetPackageController::class, 'auditView'])
-        ->name('packages.audit.view');
-
-    Route::get('/pdf/assets/{asset}', [PdfExportController::class, 'asset'])
-        ->name('pdf.asset');
-
-    /*
-    |--------------------------------------------------------------------------
-    | USER MANAGEMENT
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/users-view', [UserManagementController::class, 'index'])
-        ->name('users.view.index');
-
-    Route::get('/users-view/{user}/edit', [UserManagementController::class, 'edit'])
-        ->name('users.view.edit');
-
-    Route::put('/users-view/{user}', [UserManagementController::class, 'update'])
-        ->name('users.update');
+    /* ===== USER MANAGEMENT ===== */
+    Route::prefix('users-view')->name('users.view.')->group(function () {
+        Route::get('/', [UserManagementController::class, 'index'])->name('index');
+        Route::get('/create', [UserManagementController::class, 'create'])->name('create');
+        Route::post('/', [UserManagementController::class, 'store'])->name('store');
+        Route::get('/{user}/edit', [UserManagementController::class, 'edit'])->name('edit');
+        Route::put('/{user}', [UserManagementController::class, 'update'])->name('update');
+        Route::delete('/{user}', [UserManagementController::class, 'destroy'])->name('destroy');
+    });
+    
 });
 
 /*
 |--------------------------------------------------------------------------
-| AUTH ROUTES (BREEZE)
+| AUTH
 |--------------------------------------------------------------------------
 */
-require __DIR__ . '/auth.php';
+require __DIR__.'/auth.php';

@@ -35,26 +35,36 @@ class Asset extends Model
      * Gunakan SATU pendekatan saja: fillable
      * Jangan campur dengan guarded
      */
-    protected $fillable = [
+
+     protected $fillable = [
+        'asset_code',
+        'serial_code',
         'name',
         'category_id',
         'location_id',
         'department_id',
         'employee_name',
-        'serial_code',
         'purchase_year',
         'brand',
         'model',
         'photo_path',
-        'asset_code',
         'status',
+    
+        // 🔴 WAJIB DITAMBAHKAN
         'created_by',
+        'approval_status',
         'approved_by',
         'approved_at',
-        'qr_code_path',
     ];
     
     
+
+    public function getRouteKeyName()
+    {
+        return 'asset_code';
+    }
+    
+
 
     /* =====================
      | CASTS
@@ -124,4 +134,21 @@ public function components()
     {
         return $this->approved_at !== null;
     }
+    public function groups()
+    {
+        return $this->belongsToMany(
+            \App\Models\AssetGroup::class,
+            'asset_group_asset'
+        );
+    }
+    public function isAdmin(): bool
+{
+    return $this->role === 'admin';
+}
+
+public function isStaff(): bool
+{
+    return $this->role === 'staff';
+}
+
 }

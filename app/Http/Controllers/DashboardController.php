@@ -18,7 +18,6 @@ use Illuminate\Support\Facades\Auth;
  
          $data = [
              'total_assets'   => Asset::count(),
-             'total_packages' => AssetPackage::count(),
              'pending_assets' => Asset::where('status', 'pending')->count(),
              'asset_statuses' => Asset::select('status')
                  ->selectRaw('count(*) as total')
@@ -26,10 +25,6 @@ use Illuminate\Support\Facades\Auth;
                  ->get(),
          ];
  
-         if ($user->isAdmin()) {
-             $data['pending_packages'] =
-                 AssetPackage::where('status', 'pending')->count();
-         }
  
          return view('dashboard', $data);
      }

@@ -20,7 +20,6 @@ class ActivityLogController extends Controller
     {
         $map = [
             'asset'   => \App\Models\Asset::class,
-            'package' => \App\Models\AssetPackage::class,
         ];
 
         abort_unless(isset($map[$type]), 400);
@@ -37,6 +36,17 @@ public function exportForm()
 {
     return view('export.activity', [
         'users' => User::all(),
+    ]);
+}
+// App\Http\Controllers\ActivityLogController.php
+
+public function recent()
+{
+    return view('activity.recent', [
+        'activities' => ActivityLog::with(['user', 'loggable'])
+            ->latest()
+            ->limit(50)
+            ->get()
     ]);
 }
 

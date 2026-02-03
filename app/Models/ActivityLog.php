@@ -12,13 +12,17 @@ class ActivityLog extends Model
         'action',
         'before_data',
         'after_data',
+        'changes',
+        'approval_status',
         'user_id',
         'ip_address',
+        'meta',
     ];
 
     protected $casts = [
         'before_data' => 'array',
         'after_data'  => 'array',
+        'changes'     => 'array',
         'meta'        => 'array',
     ];
 

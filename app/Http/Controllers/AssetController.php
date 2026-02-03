@@ -19,9 +19,7 @@ use App\Services\ApprovalService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Services\QrCodeService;
-
-
-
+use App\Models\AssetGroup;
 class AssetController extends Controller
 {
     public function __construct(
@@ -55,67 +53,140 @@ class AssetController extends Controller
     | API – CREATE ASSET
     |--------------------------------------------------------------------------
     */
+
+    
+   /* =====================================================
+     | STORE ASSET
+     ===================================================== */
     public function store(Request $request)
     {
         $this->authorize('create', Asset::class);
 
         $validated = $request->validate([
-            'name'           => 'required|string',
+            'name'           => 'required|string|max:255',
             'category_id'    => 'required|exists:categories,id',
             'location_id'    => 'required|exists:locations,id',
             'department_id'  => 'required|exists:departments,id',
             'employee_name'  => 'nullable|string|max:255',
-        
-            'serial_code' => 'required|string|max:50',
 
+            'serial_code'    => 'required|string|max:100|unique:assets,serial_code',
             'purchase_year'  => 'required|digits:4',
-            'brand'          => 'required|string',
-            'model'          => 'required|string',
-        
+            'brand'          => 'required|string|max:255',
+            'model'          => 'required|string|max:255',
             'photo'          => 'nullable|image|max:2048',
-        
-            'components'             => 'nullable|array',
-            'components.*.key'       => 'nullable|string',
-            'components.*.value'     => 'nullable|string',
+
+            'components' => 'nullable|array',
+            'components.*.key'   => 'nullable|string|max:255',
+            'components.*.value' => 'nullable|string|max:255',
+
+            'components_description' => 'nullable|string',
         ]);
-        
-        // Normalisasi serial code (backend safety)
-        $validated['serial_code'] = strtoupper($validated['serial_code']);
-        
 
-        if ($request->hasFile('photo')) {
-            $validated['photo_path'] = $request->file('photo')
-                ->store('asset_photos', 'public');
-        }
+        /** @var User $user */
+        $user = Auth::user();
+        $isAdmin = $user->isAdmin();
 
-        // CREATE ASSET
-        $asset = $this->assetCreationService
-            ->createSingleAsset($validated, Auth::user());
+        $category = Category::findOrFail($validated['category_id']);
+        $location = Location::findOrFail($validated['location_id']);
 
-        // CREATE COMPONENTS
-        if (!empty($validated['components'])) {
-            foreach ($validated['components'] as $component) {
-                AssetComponent::create([
-                    'parent_type'     => 'asset',
-                    'parent_id'       => $asset->id,
-                    'component_key'   => $component['key'],
-                    'component_value' => $component['value'],
-                ]);
+        $assetCode = strtoupper(
+            "{$category->code}-{$location->code}-{$validated['serial_code']}-{$validated['purchase_year']}"
+        );
+
+        DB::beginTransaction();
+
+        try {
+            /* ================= FOTO ================= */
+            $photoPath = null;
+            if ($request->hasFile('photo')) {
+                $photoPath = $request->file('photo')
+                    ->store('asset_photos', 'public');
             }
+
+            /* ================= ASSET ================= */
+            $asset = Asset::create([
+                'asset_code'      => $assetCode,
+                'serial_code'     => $validated['serial_code'],
+                'name'            => $validated['name'],
+                'category_id'     => $validated['category_id'],
+                'location_id'     => $validated['location_id'],
+                'department_id'   => $validated['department_id'],
+                'employee_name'   => $validated['employee_name'],
+                'purchase_year'   => $validated['purchase_year'],
+                'brand'           => $validated['brand'],
+                'model'           => $validated['model'],
+                'photo_path'      => $photoPath,
+
+                'status'          => $isAdmin ? 'active' : 'pending',
+                'approval_status' => $isAdmin ? 'approved' : 'pending',
+                'approved_by'     => $isAdmin ? $user->id : null,
+                'approved_at'     => $isAdmin ? now() : null,
+                'created_by'      => $user->id,
+            ]);
+
+            /* ================= COMPONENT MANUAL ================= */
+            if (!empty($validated['components'])) {
+                foreach ($validated['components'] as $component) {
+                    if (!empty($component['key']) && !empty($component['value'])) {
+                        $asset->components()->create([
+                            'parent_type'     => 'asset',
+                            'component_key'   => trim($component['key']),
+                            'component_value' => trim($component['value']),
+                        ]);
+                    }
+                }
+            }
+
+            /* ================= COMPONENT DESKRIPSI ================= */
+            if (!empty($validated['components_description'])) {
+                foreach (preg_split("/\r\n|\n|\r/", $validated['components_description']) as $line) {
+                    if (str_contains($line, ':')) {
+                        [$key, $value] = array_map('trim', explode(':', $line, 2));
+                        if ($key && $value) {
+                            $asset->components()->create([
+                                'parent_type'     => 'asset',
+                                'component_key'   => $key,
+                                'component_value' => $value,
+                            ]);
+                        }
+                    }
+                }
+            }
+
+            DB::commit();
+
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return back()
+                ->withErrors(['error' => 'Gagal menyimpan asset: ' . $e->getMessage()])
+                ->withInput();
         }
 
-    $this->activityLogService->log(
-        model: $asset,
-        action: 'create',
-        before: null,
-        after: $asset->fresh()->toArray(),
-        request: $request
-    );
+        /* ================= ACTIVITY LOG ================= */
+        ActivityLogService::log(
+            event: 'CREATE',
+            model: $asset,
+            before: null,
+            after: $asset->toArray(),
+            changes: null,
+            approvalStatus: $isAdmin ? 'approved' : 'pending',
+            meta: [
+                'source' => 'asset_create',
+                'role'   => $user->role,
+            ]
+        );
+        
 
-    return redirect()
-        ->route('assets.view.index')
-        ->with('success', 'Asset berhasil ditambahkan');
-}
+        /* ================= REDIRECT ================= */
+        return redirect()
+            ->route('assets.view.index')
+            ->with('success', 'Asset berhasil ditambahkan');
+    }
+
+    /* =====================================================
+     | VIEW INDEX
+     ===================================================== */
 
     /*
     |--------------------------------------------------------------------------
@@ -161,72 +232,122 @@ class AssetController extends Controller
     | API – UPDATE ASSET
     |--------------------------------------------------------------------------
     */
-    public function update(Request $request, Asset $asset)
-    {
-        $this->authorize('update', $asset);
+    /* =====================================================
+     | UPDATE ASSET
+     ===================================================== */
+     public function update(Request $request, Asset $asset)
+     {
+         $this->authorize('update', $asset);
+ 
+/** @var \App\Models\User $user */
+$user = Auth::user();
+$isAdmin = $user->isAdmin();
+
+         $before = $asset->load('components')->toArray();
+ 
+         $validated = $request->validate([
+             'name'          => 'required|string|max:255',
+             'employee_name' => 'nullable|string|max:255',
+             'brand'         => 'required|string|max:255',
+             'model'         => 'required|string|max:255',
+             'photo' => 'nullable|image|max:2048',
+
+ 
+             'components'             => 'nullable|array',
+             'components.*.key'       => 'required_with:components|string',
+             'components.*.value'     => 'required_with:components|string',
+ 
+             'new_components'         => 'nullable|array',
+             'new_components.*.key'   => 'required_with:new_components|string',
+             'new_components.*.value' => 'required_with:new_components|string',
+         ]);
+ 
+         DB::transaction(function () use ($asset, $validated, $request, $user, $isAdmin, $before) {
+ 
+             if ($request->hasFile('photo')) {
+                 if ($asset->photo_path) {
+                     Storage::disk('public')->delete($asset->photo_path);
+                 }
+ 
+                 $validated['photo_path'] = $request->file('photo')
+                     ->store('asset_photos', 'public');
+             }
+ 
+             if (! $isAdmin) {
+                 $validated['approval_status'] = 'pending';
+                 $validated['approved_by']     = null;
+                 $validated['approved_at']     = null;
+                 $validated['status']          = 'pending';
+             }
+ 
+             $asset->update($validated);
+ 
+             if (!empty($validated['components'])) {
+                 foreach ($validated['components'] as $id => $comp) {
+                     $asset->components()
+                         ->where('id', $id)
+                         ->update([
+                             'component_key'   => trim($comp['key']),
+                             'component_value' => trim($comp['value']),
+                         ]);
+                 }
+             }
+ 
+             if (!empty($validated['new_components'])) {
+                 foreach ($validated['new_components'] as $comp) {
+                     $asset->components()->create([
+                         'parent_type'     => 'asset',
+                         'component_key'   => trim($comp['key']),
+                         'component_value' => trim($comp['value']),
+                     ]);
+                 }
+             }
+ 
+             $after = $asset->load('components')->toArray();
+ 
+             ActivityLogService::log(
+                event: 'UPDATE',
+                model: $asset,
+                before: $before,
+                after: $after,
+                changes: null,
+                approvalStatus: $isAdmin ? 'approved' : 'pending',
+                meta: [
+                    'role' => $user->role,
+                    'note' => $isAdmin
+                        ? 'Updated by admin'
+                        : 'Updated by staff, pending approval',
+                ]
+            );
+            
+         });
+ 
+         return redirect()
+             ->route('assets.view.show', $asset)
+             ->with(
+                 'success',
+                 $isAdmin
+                     ? 'Asset berhasil diperbarui'
+                     : 'Perubahan disimpan dan menunggu approval admin'
+             );
+     }
+ 
     
-        $validated = $request->validate([
-            'name' => 'required',
-            'employee_name' => 'nullable',
-            'brand' => 'required',
-            'model' => 'required',
-            'photo' => 'nullable|image|max:2048',
-            'components' => 'array',
-            'new_components' => 'array',
-        ]);
-    
-        DB::transaction(function () use ($asset, $validated, $request) {
-    
-            // Foto
-            if ($request->hasFile('photo')) {
-                if ($asset->photo_path) {
-                    Storage::disk('public')->delete($asset->photo_path);
-                }
-                $validated['photo_path'] =
-                    $request->file('photo')->store('asset_photos', 'public');
-            }
-    
-            $asset->update($validated);
-    
-            // Update component lama
-            if (!empty($validated['components'])) {
-                foreach ($validated['components'] as $id => $comp) {
-                    $asset->components()
-                        ->where('id', $id)
-                        ->update([
-                            'component_key' => $comp['key'],
-                            'component_value' => $comp['value'],
-                        ]);
-                }
-            }
-    
-            // Tambah component baru
-            if (!empty($validated['new_components'])) {
-                foreach ($validated['new_components'] as $comp) {
-                    if (!empty($comp['key']) && !empty($comp['value'])) {
-                        $asset->components()->create([
-                            'parent_type' => 'asset',
-                            'component_key' => $comp['key'],
-                            'component_value' => $comp['value'],
-                        ]);
-                    }
-                }
-            }
-        });
-    
-        return redirect()
-            ->route('assets.view.show', $asset) 
-            ->with('success', 'Asset berhasil diperbarui');
-    }
 
     /*
     |--------------------------------------------------------------------------
     | VIEW – ASSET LIST
     |--------------------------------------------------------------------------
     */
+
     public function viewIndex(Request $request)
     {
-        $query = Asset::query()->with(['category', 'location', 'department']);
+        $query = Asset::query()->with([
+            'category',
+            'location',
+            'department',
+            'groups', // ⬅️ PENTING
+        ]);
     
         // SEARCH
         if ($request->filled('q')) {
@@ -238,42 +359,36 @@ class AssetController extends Controller
             });
         }
     
-        // FILTERS
+        // FILTER (tetap)
         if ($request->filled('category_id')) {
             $query->where('category_id', $request->category_id);
         }
-    
         if ($request->filled('location_id')) {
             $query->where('location_id', $request->location_id);
         }
-    
         if ($request->filled('department_id')) {
             $query->where('department_id', $request->department_id);
         }
-    
         if ($request->filled('purchase_year')) {
             $query->where('purchase_year', $request->purchase_year);
         }
-    
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
     
-        $assets = $query->latest()->paginate(10)->withQueryString();
-    
         return view('assets.index', [
-            'assets'      => $assets,
+            'assets'      => $query->latest()->paginate(10)->withQueryString(),
+            'groups'      => AssetGroup::with('assets')->latest()->get(), // ⬅️ BARU
             'categories'  => Category::all(),
             'locations'   => Location::all(),
             'departments' => Department::all(),
         ]);
     }
     
-
     /*
     |--------------------------------------------------------------------------
     | VIEW – ASSET CREATE
-    |--------------------------------------------------------------------------
+    |-------------------------------------------------------------------------- 
     */
     public function viewCreate(): View
     {
@@ -357,56 +472,57 @@ class AssetController extends Controller
             ]),
         ]);
     }
-
     public function destroy(Asset $asset)
     {
         $this->authorize('delete', $asset);
     
         DB::transaction(function () use ($asset) {
     
-            // Hapus foto
+            // HAPUS FOTO
             if ($asset->photo_path) {
                 Storage::disk('public')->delete($asset->photo_path);
             }
     
-            // Hapus komponen SAJA
+            // SNAPSHOT SEBELUM HAPUS
+            $before = $asset->load('components')->toArray();
+    
+            // HAPUS RELASI & ASSET
             $asset->components()->delete();
-    
-            // Log history sebelum delete
-            app(ActivityLogService::class)->log(
-                model: $asset,
-                action: 'delete',
-                before: $asset->toArray(),
-                after: null,
-                request: request()
-            );
-    
-            // Hapus asset
             $asset->delete();
+    
+            // LOG DELETE (🔥 FIXED)
+            ActivityLogService::log(
+                event: 'DELETE',
+                model: $asset,
+                before: $before,
+                after: null,
+                changes: null,
+                approvalStatus: 'approved',
+                meta: [
+                    'context' => 'asset_delete'
+                ]
+            );
         });
     
         return redirect()
             ->route('assets.view.index')
-            ->with('success', 'Asset berhasil dihapus (history tetap disimpan)');
+            ->with('success', 'Asset berhasil dihapus');
     }
     
-    public function approve(
-        Asset $asset,
-        QrCodeService $qrCodeService
-    ) {
+    
+    public function approve(Asset $asset)
+    {
         $this->authorize('approve', $asset);
     
         $asset->update([
-            'status'       => 'active',
-            'approved_by'  => Auth::id(),
-            'approved_at'  => now(),
+            'approval_status' => 'approved',
+            'approved_by' => Auth::id(),
+            'approved_at' => now(),
         ]);
     
-        // AUTO GENERATE QR
-        $qrCodeService->generateForAsset($asset);
-    
-        return back()->with('success', 'Asset disetujui & QR Code dibuat');
+        return back()->with('success', 'Asset approved');
     }
+    
     
     
 }

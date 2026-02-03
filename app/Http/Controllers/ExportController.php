@@ -17,10 +17,9 @@ class ExportController extends Controller
         $this->middleware('auth');
     }
 
-    /* =========================
-     | VIEW FORM
-     ========================= */
-
+    /* =========================================================
+     | VIEW FORM – ASSET EXPORT
+     ========================================================= */
     public function viewAssetForm()
     {
         return view('export.asset', [
@@ -30,6 +29,9 @@ class ExportController extends Controller
         ]);
     }
 
+    /* =========================================================
+     | VIEW FORM – ACTIVITY LOG EXPORT
+     ========================================================= */
     public function viewActivityForm()
     {
         return view('export.activity', [
@@ -37,41 +39,69 @@ class ExportController extends Controller
         ]);
     }
 
-    /* =========================
-     | EXPORT ACTION
-     ========================= */
-
+    /* =========================================================
+     | EXPORT ASSETS (SINGLE / GROUP / BOTH)
+     ========================================================= */
     public function exportAssets(Request $request)
     {
-        $filters = $request->validate([
+        $validated = $request->validate([
             'status'        => 'nullable|string',
             'category_id'   => 'nullable|integer',
             'location_id'   => 'nullable|integer',
             'department_id' => 'nullable|integer',
             'year_from'     => 'nullable|integer',
             'year_to'       => 'nullable|integer',
+
+            'export_type'   => 'required|in:single,group,both',
+            'sheet_mode'    => 'required|in:single,separate',
+            'format'        => 'required|in:xlsx,csv',
         ]);
 
-        $format = $request->get('format', 'xlsx');
+        $filters = [
+            'status'        => $validated['status']        ?? null,
+            'category_id'   => $validated['category_id']   ?? null,
+            'location_id'   => $validated['location_id']   ?? null,
+            'department_id' => $validated['department_id'] ?? null,
+            'year_from'     => $validated['year_from']     ?? null,
+            'year_to'       => $validated['year_to']       ?? null,
+        ];
 
-        return $this->exportService
-            ->exportAssets($filters, $format);
+        // ⚠️ POSitional arguments — AMAN
+        return $this->exportService->exportAssets(
+            $filters,
+            $validated['export_type'],
+            $validated['sheet_mode'],
+            $validated['format']
+        );
     }
 
+    /* =========================================================
+     | EXPORT ACTIVITY LOG
+     ========================================================= */
     public function exportActivity(Request $request)
     {
-        $filters = $request->only([
-            'subject_type',
-            'action',
-            'user_id',
-            'date_from',
-            'date_to',
+        $validated = $request->validate([
+            'subject_type' => 'nullable|in:asset,group,both',
+            'action'       => 'nullable|string',
+            'user_id'      => 'nullable|integer',
+            'date_from'    => 'nullable|date',
+            'date_to'      => 'nullable|date',
+            'sheet_mode'   => 'required|in:single,separate',
+            'format'       => 'required|in:xlsx,csv',
         ]);
-    
-        $format = $request->get('format', 'xlsx');
-    
-        return $this->exportService
-            ->exportActivities($filters, $format);
+
+        $filters = [
+            'subject_type' => $validated['subject_type'] ?? 'both',
+            'action'       => $validated['action']       ?? null,
+            'user_id'      => $validated['user_id']      ?? null,
+            'date_from'    => $validated['date_from']    ?? null,
+            'date_to'      => $validated['date_to']      ?? null,
+        ];
+
+        return $this->exportService->exportActivities(
+            $filters,
+            $validated['sheet_mode'],
+            $validated['format']
+        );
     }
-    
 }

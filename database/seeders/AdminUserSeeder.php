@@ -13,9 +13,10 @@ class AdminUserSeeder extends Seeder
         User::updateOrCreate(
             ['email' => 'admin@inventory.local'],
             [
-                'name' => 'Super Admin',
-                'password' => Hash::make('admin123'),
-                'role' => 'admin',
+                'name'            => 'Super Admin',
+                'password'        => Hash::make('admin123'),
+                'role'            => 'admin',
+                'is_super_admin'  => true,
             ]
         );
     }

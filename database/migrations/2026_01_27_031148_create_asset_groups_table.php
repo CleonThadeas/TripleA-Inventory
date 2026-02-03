@@ -8,38 +8,15 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('assets', function (Blueprint $table) {
+        Schema::create('asset_groups', function (Blueprint $table) {
             $table->id();
 
             // Identity
-            $table->string('asset_code')->unique();
             $table->string('name');
+            $table->text('description')->nullable();
 
-            // Relations
-            $table->foreignId('category_id')->constrained()->restrictOnDelete();
-            $table->foreignId('location_id')->constrained()->restrictOnDelete();
-            $table->foreignId('department_id')->constrained()->restrictOnDelete();
-
-            // Ownership / user
+            // Ownership
             $table->string('employee_name')->nullable();
-
-            // Detail
-            $table->year('purchase_year');
-            $table->string('brand')->nullable();
-            $table->string('model')->nullable();
-
-            // Media
-            $table->string('photo_path')->nullable();
-            $table->string('qr_code_path')->nullable();
-
-            // Status bisnis
-            $table->enum('status', [
-                'pending',
-                'active',
-                'maintenance',
-                'damaged',
-                'lost',
-            ])->default('pending');
 
             // Approval workflow
             $table->enum('approval_status', [
@@ -62,7 +39,6 @@ return new class extends Migration
             $table->timestamps();
 
             // Indexes
-            $table->index('status');
             $table->index('approval_status');
             $table->index('created_by');
         });
@@ -70,6 +46,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('assets');
+        Schema::dropIfExists('asset_groups');
     }
 };

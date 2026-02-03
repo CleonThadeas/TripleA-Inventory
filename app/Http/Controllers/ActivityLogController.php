@@ -20,7 +20,6 @@ class ActivityLogController extends Controller
     {
         $map = [
             'asset'   => \App\Models\Asset::class,
-            'package' => \App\Models\AssetPackage::class,
         ];
 
         abort_unless(isset($map[$type]), 400);

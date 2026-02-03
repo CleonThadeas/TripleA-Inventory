@@ -15,35 +15,17 @@ class ActivitiesExport implements FromCollection, WithHeadings
 
     public function collection(): Collection
     {
-        $query = ActivityLog::with(['user', 'loggable'])
-            ->latest();
+        $query = ActivityLog::with(['user'])
+            ->orderBy('created_at');
 
-        // 🔹 FILTER OBJECT TYPE
-        if (!empty($this->filters['subject_type'])) {
-            $map = [
-                'asset'   => \App\Models\Asset::class,
-                'package' => \App\Models\AssetPackage::class,
-            ];
-
-            if (isset($map[$this->filters['subject_type']])) {
-                $query->where(
-                    'loggable_type',
-                    $map[$this->filters['subject_type']]
-                );
-            }
-        }
-
-        // 🔹 FILTER ACTION
         if (!empty($this->filters['action'])) {
             $query->where('action', $this->filters['action']);
         }
 
-        // 🔹 FILTER USER
         if (!empty($this->filters['user_id'])) {
             $query->where('user_id', $this->filters['user_id']);
         }
 
-        // 🔹 FILTER DATE RANGE
         if (!empty($this->filters['date_from'])) {
             $query->whereDate('created_at', '>=', $this->filters['date_from']);
         }
@@ -52,27 +34,31 @@ class ActivitiesExport implements FromCollection, WithHeadings
             $query->whereDate('created_at', '<=', $this->filters['date_to']);
         }
 
-        return $query->get()->map(function ($log) {
-            return [
-                'Tanggal'     => $log->created_at,
-                'Object'      => class_basename($log->loggable_type),
-                'Object ID'   => $log->loggable_id,
-                'Action'      => strtoupper($log->action),
-                'User'        => $log->user->name ?? 'System',
-                'IP Address'  => $log->ip_address,
-            ];
-        });
+        return $query->get()->map(fn ($log) => [
+            'DATE'        => $log->created_at->format('Y-m-d H:i:s'),
+            'OBJECT TYPE' => class_basename($log->loggable_type),
+            'OBJECT ID'   => $log->loggable_id,
+            'CODE'        => $log->loggable_code ?? '-',
+            'ACTION'      => $log->action,
+            'USER'        => $log->user->name ?? 'SYSTEM',
+            'IP ADDRESS'  => $log->ip_address,
+            'BEFORE'      => json_encode($log->before_data),
+            'AFTER'       => json_encode($log->after_data),
+        ]);
     }
 
     public function headings(): array
     {
         return [
-            'Tanggal',
-            'Object',
-            'Object ID',
-            'Action',
-            'User',
-            'IP Address',
+            'DATE',
+            'OBJECT TYPE',
+            'OBJECT ID',
+            'CODE',
+            'ACTION',
+            'USER',
+            'IP ADDRESS',
+            'BEFORE',
+            'AFTER',
         ];
     }
 }
